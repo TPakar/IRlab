@@ -1,5 +1,7 @@
 function [RGBim, RGBim2, floatim, floatim2] = playIrVideo(imagedata, imagedataorig, rangev, vidspeed, scalediv, videoON, showcurve, skipnum, fwid, fhei, startf, endf, varargin)
-
+%% This function plays the RGB IR video for registration checking. 
+% Copyright Tomppa Pakarinen (tomppa.pakarinen@tuni.fi)
+% Cite: https://doi.org/10.1016/j.imu.2022.100940
 
 
 if isempty(varargin)

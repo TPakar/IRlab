@@ -22,41 +22,53 @@ tic
 
 if readall == 0
     for i = 1:length(direct)
+        h = waitbar(0, ['Importing partition ', num2str(i),'/',num2str(length(direct))]);
+        drawnow;
         if direct(i).bytes > 0
-            % dlmread code (from Matlab central), faster but does not partition
-            % correctly undel the files always contains 'frameN' in B2
-            %temp = delimread([direct(1).folder,'\',direct(i).name],';','raw','B2:LI241');
-            %imdata.(['frame',num2str(structcount)]) = str2double(strrep(temp.raw,',','.'));
-
-            % Own code 2x slower but partitions correctly
+            
+            % 2x slower implementation but partitions correctly
             temp = fastread([direct(1).folder,'\'], direct(i).name, delimiter, lower(skipcondition), skipnumber, stopcondition);
-
+            
             tempname = fieldnames(temp);
             if length(tempname) == 1
                 imdata.(['frame',num2str(structcount)]) = str2double(strrep(temp.([tempname{1}]),',','.'));
             else
                 for j = 0:length(tempname)-1
                     imdata.(['frame',num2str(j+structcount)]) = str2double(strrep(temp.([tempname{j+1}]),',','.'));
+                    if mod(j,50) || j == length(tempname)-1
+                        waitbar(structcount/length(tempname),h);
+                        drawnow;
+                    end
                 end
                 structcount = structcount + j;
+                
             end
            % structcount = structcount + 1;
         end
         toc
         disp(['file number: ', num2str(structcount)]);
+        
     end
+    delete(h);
+    
 else
+    h = waitbar(0, "Importing data...");
     for i = 1:length(direct)
+    
     if direct(i).bytes > 0
         
         % Fastest code for partitioned FLIR E8 CSV data
         temp = fasterread([direct(1).folder,'\'], direct(i).name, delimiter, skipcondition, fs, framesiz, structcount);
         tempname = fieldnames(temp);
+        
         if length(tempname) == 1
             imdata.(['frame',num2str(structcount)]) = temp.(tempname(1));
         else
             for j = 0:length(tempname)-1
                 imdata.(['frame',num2str(j+structcount)]) = temp.([tempname{j+1}]);
+                %if mod(j,50) || j == length(tempname)-1
+                     waitbar(j/length(tempname),h, ['Importing partition ', num2str(i),'/',num2str(length(direct))]);
+                %end
             end
             structcount = structcount + j;
         end
@@ -66,3 +78,5 @@ else
     disp(['Frame number: ', num2str(structcount), 'read']);
     end
 end
+
+delete(h);

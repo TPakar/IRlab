@@ -1,6 +1,9 @@
 function [gamma, i, dif] = CalcGamma(varargin)
+% CalcGamma function (Original author: Author: Mark Geurts, mark.w.geurts@gmail.com). Modified by Tomppa Pakarinen (tomppa.pakarinen@tuni.fi) to be compatible for IR image application 
+% 
 
-% CalcGamma computes 1-D, 2-D, or 3-D global or absolute gamma between two
+%% Original header
+%CalcGamma computes 1-D, 2-D, or 3-D global or absolute gamma between two
 % datasets (reference and target) given a defined coordinate space. The 
 % datasets must have the same number of dimensions, although they can be 
 % different sizes. Gamma will be computed for each target dose point by

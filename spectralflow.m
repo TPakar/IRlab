@@ -1,23 +1,8 @@
-function [bloodflow, bandpassflow, flowrange, timevect] = spectralflow(inputdata, bandpassrange, ROI, ROInames, fs, varargin)
-
-% Copyright (C) 2020 Tomppa Pakarinen, tomppa.pakarinen@tuni.fi
-
-
-% This program is free software: you can redistribute it and/or modify it 
-% under the terms of the GNU General Public License as published by the  
-% Free Software Foundation, either version 3 of the License, or (at your 
-% option) any later version.
-%
-% This program is distributed in the hope that it will be useful, but 
-% WITHOUT ANY WARRANTY; without even the implied warranty of 
-% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General 
-% Public License for more details.
-% 
-% You should have received a copy of the GNU General Public License along 
-% with this program. If not, see http://www.gnu.org/licenses/
+function [bloodflow, bandpassflow, flowrange, timevect] = spectralflow(inputdata, bandpassrange, ROI, ROInames, fs, roimeans, varargin)
 
 
 %% This function estimates blood flow using spectral modulation of thermal data.
+% Copyright Tomppa Pakarinen, tomppa.pakarinen@tuni.fi
 
 % High frequency temprature changes(0.005-0.02 Hz, 0.02-0.05 Hz, 0.05-0.15
 %Hz, 0.15-0.4 Hz, and 0.4-2.0 Hz), corresponding to endothelial (metabolic),
@@ -25,8 +10,7 @@ function [bloodflow, bandpassflow, flowrange, timevect] = spectralflow(inputdata
 % Based on paper: Thermography-based blood flow imaging in human skin of the hands and feet A spectral filtering approach
 % By Sagaidachnyi, et al. blood flow could be derived from the temperature
 % signal by modulading the T-data (amplitude and frequency dependent phase
-% modulation). The method used in this section an implementation of the FFT
-% method described in:
+% modulation). The method used in this section in directly from the paper
 
 %Sagaidachnyi, Andrey & Fomin, A. & Usanov, D. & Skripal, Anatoly. (2017). 
 %Thermography-based blood flow imaging in human skin of the hands and feet: A spectral filtering approach. 
@@ -40,10 +24,6 @@ function [bloodflow, bandpassflow, flowrange, timevect] = spectralflow(inputdata
 %neurogenic, myogenic, respiratory, and cardiac origins.
 
 % ROI: array of binary matrices. Used as masks for input data.
-
-% ROInames contains the ROI names
-
-% fs is the sampling frequency of the input video
 
 
 %% Outputs
@@ -120,9 +100,14 @@ for kk = 1:roundlen
     
     % Compute the modulation vector
     PAcor1(spos:epos) = exp((1 + 1i)*skinthickness.*sqrt(pi*pixeldata.freqax(spos:epos)/thermaldiffusivity));
-    PAphase(spos:epos) = exp(1i*skinthickness.*sqrt(pi.*pixeldata.freqax(spos:epos)./thermaldiffusivity));
-    PAamp(spos:epos) = exp(-skinthickness.*sqrt(pi.*pixeldata.freqax(spos:epos)./thermaldiffusivity));
+    %PAphase(spos:epos) = exp(1i*skinthickness.*sqrt(pi.*pixeldata.freqax(spos:epos)./thermaldiffusivity));
+    %PAamp(spos:epos) = exp(-skinthickness.*sqrt(pi.*pixeldata.freqax(spos:epos)./thermaldiffusivity));
     
+    %PAcor1 = exp(skinthickness*sqrt(pi*pixeldata.freqax/thermaldiffusivity)*(1 + 1i));
+    %PAcor = [PAcor1 zeros(1, NFFT - length(PAcor1))];
+    % convtest
+    %PAcor2 = ifft(PAcor1, 'symmetric');
+    %PAcor2 = PAcor2(1:serieslen);
     pixeldata.bloodflow2 = zeros(ydimsize, xdimsize, serieslen);
     %filtereddata = zeros(ydimsize, xdimsize, serieslen);
     % Complex conjugate symmetry
@@ -131,7 +116,12 @@ for kk = 1:roundlen
     pixeldata.fourier = zeros(NFFT,1);
     pixeldata.bloodflowFT = zeros(NFFT,1);
 
+    %[~, idxmin] = min(abs(pixeldata.freqax - bandpassrange(1)));
+    %[~, idxmax] = min(abs(pixeldata.freqax - bandpassrange(2)));
     waitbarproduct = length(ROInames)*ydimsize*xdimsize;
+    
+    
+    
     
     maxval = 0;
     minval = -1000;
@@ -139,51 +129,50 @@ for kk = 1:roundlen
         if (kk == 1 && contains(ROInames{k}, 'ref')) || (kk == 2 && contains(ROInames{k}, 'targ')) || (~contains(ROInames{k}, 'ref') && ~contains(ROInames{k}, 'targ'))
             ROIy = size(ROI{k}, 1);
             ROIx = size(ROI{k}, 2);
-            for i = 1:ROIx
+            for i = 1:1%ROIx
                waitbar(waitbarcount/waitbarproduct, h);
-                for j = 1:ROIy
+                for j = 1:1%ROIy
                     waitbarcount = waitbarcount + 1;
-                    if ROI{k}(j,i) == 1
-                        % Fourier transform
-                        tempS = squeeze(temporal(j,i,:));
-                        
-                        % Filter the signal 
-                        % Add sufficient padding
-                        padding = 100/freqstart;
-                        paddeddata = ones(1,length(tempS)+padding*2);
-                        paddeddata(1:padding) = tempS(1,1);
-                        paddeddata(end-padding:end) = tempS(end);
-                        paddeddata(padding+1:end-padding) = tempS;
-                        if freqstart < 0.001 
-                            % Bandpass if the lower frequency is high
-                            % enough
-                            temp = bandpass(paddeddata, [freqstart, freqend], fs, 'impulseresponse', 'iir');
-                        else
-                            % Lowpass for lower frequencies
-                            temp = lowpass(paddeddata, freqend, fs,'impulseResponse' ,'iir');   
-                        end
-                        % Truncate padding after filtering
-                        signal = temp(padding+1:end-padding);
-                        
-                        % Fourier transform
-                        fsignal = fft(signal, NFFT);
-                       
-
-                        % Phase shift and amplitude correction useing convolution (in freq space)
-                        % Filter the signal
-                        length(PAcor1)
-                        length(fsignal)
-                        filtsignal = PAcor1.*fsignal;
-                        % Inverse transform with fft symmetry assumption
-                        tempflow2 = ifft(filtsignal, 'symmetric');
-                        % Save the final bloodflow
-                        pixeldata.bloodflow2(j,i,:) = tempflow2(1:serieslen);
-                       
-
+                    %if ROI{k}(j,i) == 1
+                    % Fourier transform
+                    %tempS = squeeze(temporal(j,i,:));
+                    %roimeans
+                    tempS = roimeans{k};
+                    % Filter the signal 
+                    % Add sufficient padding
+                    padding = 100/freqstart;
+                    paddeddata = ones(1,length(tempS)+padding*2);
+                    paddeddata(1:padding) = tempS(1,1);
+                    paddeddata(end-padding:end) = tempS(end);
+                    paddeddata(padding+1:end-padding) = tempS;
+                    if freqstart < 0.001 
+                        % Bandpass if the lower frequency is high
+                        % enough
+                        temp = bandpass(paddeddata, [freqstart, freqend], fs, 'impulseresponse', 'iir');
                     else
-                        %pixeldata.bloodflow(j,i,1:serieslen) = 0;
-                        pixeldata.bloodflow2(j,i,1:serieslen) = 0;
+                        % Lowpass for lower frequencies
+                        temp = lowpass(paddeddata, freqend, fs,'impulseResponse' ,'iir');   
                     end
+                    % Truncate padding after filtering
+                    signal = temp(padding+1:end-padding);
+
+                    % Fourier transform
+                    fsignal = fft(signal, NFFT);
+
+
+                    % Phase shift and amplitude correction useing convolution (in freq space)
+                    % Filter the signal
+                    filtsignal = PAcor1.*fsignal;
+                    % Inverse transform with fft symmetry assumption
+                    tempflow2 = ifft(filtsignal, 'symmetric');
+                    % Save the final bloodflow
+                    pixeldata.bloodflow2(j,i,:) = tempflow2(1:serieslen);
+                    bloodflow.([ROInames{k}, '_mean']) = tempflow2(1:serieslen);
+
+                %else
+                %    %pixeldata.bloodflow(j,i,1:serieslen) = 0;
+                %    pixeldata.bloodflow2(j,i,1:serieslen) = 0;
+                %end
                 end
             end
             if freqstart >= 0.001
@@ -192,9 +181,11 @@ for kk = 1:roundlen
                 disp('Lower succesfully frequency limit under the threshold (0.001Hz) -> Signal low pass filtered');
             end
             % Collect new data as struct for video display
+            
+            
             for i = 1:serieslen
                %pixelvideo.(['frame', num2str(i)]) = pixeldata.bloodflow(:,:,i); 
-               bloodflow.(ROInames{k}).(['frame', num2str(i)]) = pixeldata.bloodflow2(:,:,i); 
+               bloodflow.(ROInames{k}).(['frame', num2str(i)]) = pixeldata.bloodflow2(:,:,i);
                %bandpassflow.(ROInames{k}).(['frame', num2str(i)]) = filtereddata(:,:,i);
                tempmax = max(max(pixeldata.bloodflow2(:,:,i)));
                tempmin = min(min(pixeldata.bloodflow2(:,:,i)));
